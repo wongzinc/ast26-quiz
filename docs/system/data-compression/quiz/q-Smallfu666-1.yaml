@@ -1,7 +1,7 @@
 author: Smallfu666
 date: 2026-05-25
 question: |
-  在 Android 唯讀分割區的優化中，華為提出的 EROFS（Enhanced Read-Only File System）
+  在 Android 唯讀分割區的優化中，華為提出的 EROFS
   成功解決了傳統 Squashfs 帶來的系統卡頓問題。已知 EROFS 採用了固定輸出
   （Fixed-sized output）的 4 KiB 區塊設計。請根據 EROFS 的設計原理，推論下列
   關於其「就地解壓（In-place Decompression）」與記憶體管理機制的敘述，
@@ -25,7 +25,7 @@ options:
       上進行 in-place decompression，直接把解壓結果填入 page cache，避免傳統
       做法中額外的 bounce buffer 配置與 `memcpy` 開銷。
   - text: |
-      為了達到隨機存取友善（Random Access Friendly），EROFS 嚴格要求每個壓縮區塊的邊界（Block Boundary）必須與檔案的邊界完全對齊，以確保在 Page Cache 內不會產生任何碎片。
+      EROFS 嚴格要求每個壓縮區塊的邊界（Block Boundary）必須與檔案的邊界完全對齊，以確保在 page cache 內不會產生任何碎片。
     explanation: |
       EROFS 為保持高壓縮率，採取彈性的區塊布局，並不要求壓縮區塊邊界對齊檔案
       邊界。若強求對齊反而會產生嚴重的內部碎片（Internal Fragmentation），

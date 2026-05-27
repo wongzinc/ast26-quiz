@@ -1,0 +1,33 @@
+author: wongzinc
+date: 2026-05-28
+question: |
+  有三個小檔案 X、Y、Z，壓縮後的大小分別為 1.2KB、2.8KB、3.5KB。在「強制對齊邊界」的傳統 4KB Block 系統中，
+  這三個檔案總共會消耗多少實體空間？如果改用 EROFS 的「打破邊界連續塞入 (Continuous Packing)」技術，又會消耗多少實體空間？
+options:
+  - text: "傳統：8KB / EROFS:8KB"
+    explanation: |
+      **死因：過度高估了傳統檔案系統的空間利用率。**
+      傳統作法無法讓 X (1.2KB) 和 Y (2.8KB) 共享同一個 Block。只要檔案 Y 說「我要寫入硬碟」，系統就會直接配發一個全新的 4KB Block 給它，導致傳統作法必定會消耗到 3 個 Block (12KB)，不可能只用 8KB。
+  - text: "傳統：7.5KB / EROFS:7.5KB"
+    explanation: |
+      **死因：把「邏輯大小」當成了「實體空間」。**
+      7.5KB 是這三個檔案加總起來的「純資料量(邏輯大小)」。但在計算檔案系統效能時，我們看的是它「實際上佔用了多少硬碟的格子(實體空間)」。因為碎片化與對齊機制的關係，實體消耗幾乎一定會大於邏輯大小，這也是為什麼我們需要 EROFS 這種技術來盡量讓「實體消耗」逼近「邏輯大小」。
+  - text: "傳統：12KB / EROFS:8KB"
+    correct: true
+    explanation: |
+      **傳統 12KB 的計算**
+      傳統檔案系統有「邊界強迫症」，一個 Block 只能專心裝一個檔案的資料：
+
+      - 檔案 X (1.2KB) → 用掉 1 個 4KB Block(浪費 2.8KB)
+      - 檔案 Y (2.8KB) → 用掉 1 個 4KB Block(浪費 1.2KB)
+      - 檔案 Z (3.5KB) → 用掉 1 個 4KB Block(浪費 0.5KB)
+      總計：$3 \times 4\text{KB} = 12\text{KB}$。
+      **EROFS 8KB 的計算**
+      EROFS 打破了邊界，允許「連續塞入 (Continuous Packing)」，只要箱子沒滿就繼續塞：
+      - 第 1 個 Block：裝入 X (1.2KB) + 緊接著裝入 Y (2.8KB) → 剛好 4.0KB，完美塞滿、0 浪費。
+      - 第 2 個 Block：裝入 Z (3.5KB) → 剩下 0.5KB 空白。
+      總計：$2 \times 4\text{KB} = 8\text{KB}$。
+  - text: "傳統：12KB / EROFS:7.5KB"
+    explanation: |
+      **死因：忽略了底層硬碟的「最小配置單位」。**
+      EROFS 雖然能連續塞入資料，但它依舊是建立在 Fixed-Output(固定 4KB 產出)的架構上。硬碟在分配空間時，不可能給你「半個 Block」或「0.87 個 Block」。只要你動用到了第 2 個 Block，不管裡面裝多少，系統就是扣除你 $4\text{KB} \times 2 = 8\text{KB}$ 的實體空間。所以 7.5KB 這種非 4 的倍數，在實體消耗上是不可能出現的。

@@ -1,0 +1,36 @@
+author: wongzinc
+date: 2026-05-28
+question: |
+  在記憶體極度吃緊(OOM 邊緣)的設備上執行 EROFS。某個 4KB 的壓縮 Block 包含了三個邏輯 Page (Page A、B、C) 的資料。
+  User-space 程式目前呼叫 `read()` 只要讀取 Page A。核心為了執行 In-place Decompression，會發生什麼事？
+options:
+  - text: "核心只會分配 Page A 的 Page Cache，解壓時 B 和 C 的輸出會被直接導向 `/dev/null` 丟棄，下次要讀再重新解壓。"
+    explanation: |
+      **死因：壓縮演算法的物理限制。**
+      像 LZ4 這種基於字典的壓縮演算法，在解壓縮的過程中，資料是具有前後依賴性的。解壓縮引擎必須把資料連續地寫入記憶體中，它無法在指令層說「這段我不寫入，直接跳過」。
+      如果不給 B 和 C 分配任何記憶體(連暫存 Buffer 都不給)，解壓縮引擎會因為找不到合法的記憶體位址來寫入輸出而直接觸發 Kernel Panic(核心崩潰)。
+      因此不能單純地「導向 `/dev/null` 丟棄」。
+  - text: "觸發 Page Fault，核心會呼叫 eBPF hook 來決定是否要壓縮 B 和 C 並寫入 Swap 空間。"
+    explanation: |
+      **死因：完全混淆了 Kernel 子系統的職責。**
+      1. **Page Fault 的時機不對**：這是透過 VFS 觸發的 `read()` 系統呼叫，資料正在從硬碟搬進記憶體的路上，屬於檔案系統的正常 I/O 流程，而不是 MMU(記憶體管理單元)觸發的 Page Fault。
+      2. **eBPF 的角色不對**:eBPF 是極度強大的核心觀測與網路控制工具，但 VFS 並不會在關鍵的 I/O data path 上主動 call 一個 eBPF 程式來做記憶體分配決策，這會產生不必要的 Overhead。
+      3. **Swap 的概念不對**:EROFS 讀出來的資料屬於 File-backed pages(有實體檔案備份的記憶體)。記憶體不夠時，核心會直接把它們從 RAM「丟掉 (Evict)」，
+      下次需要時再從硬碟讀一次就好。只有 Anonymous pages(例如程式 `malloc` 出來、沒有對應檔案的資料)才需要被寫入 Swap 空間。
+  - text: "EROFS 會強制 User-space 程式進入 Sleep (D state)，直到系統釋放出足夠容納 A、B、C 三個 Page 的記憶體為止。"
+    explanation: |
+      **死因：為了非必要的快取，引發災難性的 Latency。**
+      User-space 程式真正需要的只有 Page A,B 和 C 只是附帶產物。如果核心為了一定要快取 B 和 C 而觸發 Direct Reclaim(直接回收記憶體)，
+      甚至把這個 Process 丟進 D state(Uninterruptible Sleep，不可中斷的睡眠狀態)去死等記憶體，會造成嚴重的系統卡頓。
+      高效能的檔案系統絕對不該為了「非必要的快取」去阻塞當前的 I/O 請求。
+  - text: "EROFS 會嘗試分配 Managed Pages(或稱 Cached Pages)來暫存 B 和 C。若記憶體真的不足，才會 fallback 退回使用短期的小 Buffer，解完 A 後立刻釋放 Buffer。"
+    correct: true
+    explanation: |
+      EROFS 有一套精巧的 VFS 記憶體管理機制，會盡可能把「順便解出來」的 B 和 C 放進 Page Cache，但遇到極端記憶體壓力時，有 fallback 機制來避免觸發 OOM Killer。
+      **理想狀況(有記憶體)**
+      核心會覺得「既然都花 CPU 解壓縮了，順便幫你存起來吧！」於是會向系統要幾塊 Page Cache(Managed Pages)把 B 和 C 放進去。
+      如果下一秒程式剛好要讀 B，核心就能瞬間從 RAM 裡拿給它，這就是 Readahead(預讀)的效應。
+      **極端狀況(OOM 邊緣)**
+      系統記憶體快爆時，EROFS 不會為了「強求」快取 B 和 C 而把系統搞垮。它會觸發 Fallback 機制：只向系統要一塊極小、短暫的 Per-CPU Buffer。
+      這個 Buffer 只是為了讓解壓縮演算法 (LZ4) 有地方可以「吐出」B 和 C 的資料。一旦解壓完成、核心把 A 安全放進 Page Cache 後，就會立刻把這塊短暫 Buffer 釋放掉。
+      這種「能省則省、能快取就快取」的彈性設計，正是 EROFS 可以在低階手機(RAM 極小)上流暢運作的關鍵。

@@ -1,27 +1,22 @@
 author: wongzinc
 date: 2026-05-28
 question: |
-  你正在為一款高頻交易系統設計內存資料庫的持久化儲存層。該系統的特徵是「極度頻繁的 4KB 隨機讀取」，
-  且對延遲 (Latency) 極度敏感。在考慮資料壓縮時，你應該傾向哪一種 Block Size 設計？
+  有三個小檔案 X、Y、Z，壓縮後的大小分別為 1.2KB、2.8KB、3.5KB。在強制對齊邊界的傳統 4KB Block 系統中，
+  這三個檔案總共會消耗多少實體空間？如果改用 EROFS 的 Continuous Packing 技術，又會消耗多少實體空間？
 options:
-  - text: "採用 4KB 的小 Block，雖然會犧牲部分壓縮率，但能將解壓成本與讀取放大降到最低。"
+  - text: "傳統：8KB / EROFS:8KB"
+    explanation: |
+      傳統檔案系統不允許兩個檔案共用同一個 Block。X 與 Y 會各自配置一個獨立的 4KB Block，
+      因此三個檔案至少需要 3 個 Block，共 12KB，不會是 8KB。
+  - text: "傳統：7.5KB / EROFS:7.5KB"
+    explanation: |
+      7.5KB 是三個檔案的邏輯大小總和（1.2 + 2.8 + 3.5），不是實體佔用空間。
+  - text: "傳統：12KB / EROFS:8KB"
     correct: true
     explanation: |
-      在極度要求隨機讀取延遲的情境下，讓 Block Size 對齊 Query Size 可以避免不必要的 I/O 與 CPU 解壓負擔。
-  - text: "採用 Fixed-Input 策略，讓壓縮後的實體 Block 越小越好。"
+      **傳統 12KB**：每個檔案獨佔一個 Block → $3 \times 4\text{KB} = 12\text{KB}$。
+      **EROFS 8KB**：Continuous Packing 讓 X + Y 共用 Block 1、Z 用 Block 2 → $2 \times 4\text{KB} = 8\text{KB}$。
+  - text: "傳統：12KB / EROFS:7.5KB"
     explanation: |
-      死因：額外的「查表尋址 (Address Translation) 成本」
-      Fixed-Input 的特徵是「每個實體 Block 壓縮出來的大小都不一樣」。當實體大小不一時，系統就無法使用簡單的數學公式 $O(1)$ 直接算出資料在哪裡。
-      每次要讀取這 4KB 的資料前，系統都必須先去查詢一張龐大的 Index Table(索引表)來找實體偏移量 (Offset)。
-      在極度敏感的高頻交易中，多一次記憶體的指標跳躍與查表，就是多一次的 Latency 懲罰。相比之下，Fixed-Output(或是大小對齊的 4KB 小 Block)可以直接精準定位，速度快得多。
-  - text: "採用 1MB 的大 Block，以獲取最高的壓縮率，節省 SSD 寫入壽命。"
-    explanation: |
-      死因：嚴重的「讀取放大」與「CPU 解壓延遲」
-      高頻交易系統的勝負在微秒之間。如果採用 1MB 的 Block，當系統只需要讀取其中一筆 4KB 的訂單狀態時，底層必須把完整的 1MB 讀進記憶體，並呼叫 CPU 將這 1MB 全部解壓縮。
-      為了 4KB 的資料，做了 1024KB 的 I/O 與解壓運算，產生了 250 倍的讀取放大 (Read Amplification)。這會大量消耗 CPU 資源，並產生巨大的 Latency，高頻交易系統會直接卡頓。
-  - text: "採用 128KB 的中等 Block，並將頻繁讀取的資料放在 Block 的末端以加速解壓。"
-    explanation: |
-      死因：違背了壓縮演算法的「資料依賴性」
-      這是一個常見的架構陷阱。主流的壓縮演算法(如 LZ4、Zstd 等)都是基於「字典」或「歷史參考」來運作的。
-      壓縮過的資料是無法隨機跳躍解壓的。也就是說，即便你把最常讀取的資料放在這個 128KB Block 的最後面，CPU 也不可能直接跳到後面解壓。
-      它依然必須從第 1 個 byte 開始，一路解壓縮到最後，才能還原出你要的資料。因此，延遲問題完全沒有解決。
+      EROFS 的最小配置單位是一個 Block。動用第 2 個 Block 後，無論填入多少，
+      實體消耗都是 $2 \times 4\text{KB} = 8\text{KB}$

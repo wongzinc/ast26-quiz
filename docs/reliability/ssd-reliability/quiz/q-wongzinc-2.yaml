@@ -15,8 +15,9 @@ options:
     correct: true
     explanation: |
       Local parity 只能還原其所屬 group 內的單一失效。
-      當失效數量超過 local group 的能力、或多個 group 同時失效時，
-      就需要涵蓋所有 data fragment 的 global parity 介入，補上 local parity 無法獨力處理的 multi-failure。
+      當某個 group 內的失效數超過 local parity 的能力，
+      local parity 就無法獨力還原，
+      需要 global parity 介入。
   - text: "直接降低 storage overhead"
     explanation: |
       加入 global parity 會增加冗餘、提高 storage overhead，而非降低。

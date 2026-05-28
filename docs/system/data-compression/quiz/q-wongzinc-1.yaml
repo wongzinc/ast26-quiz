@@ -12,7 +12,7 @@ options:
     explanation: |
       傳統系統強制每個檔案對齊到獨立的 block，實際是 12KB；EROFS 的最小配置單位是一個 block。
       動用第 2 個 block 後，無論填入多少，實體消耗都是 $2 \times 4\text{KB} = 8\text{KB}$, 
-      一定是 4kb 的倍數
+      一定是 4KB 的倍數。
   - text: "傳統：12KB / EROFS:8KB"
     correct: true
     explanation: |
@@ -21,4 +21,4 @@ options:
   - text: "傳統：12KB / EROFS:7.5KB"
     explanation: |
       EROFS 的最小配置單位是一個 block。動用第 2 個 block 後，無論填入多少，
-      實體消耗都是 $2 \times 4\text{KB} = 8\text{KB}$, 一定是 4kb 的倍數
+      實體消耗都是 $2 \times 4\text{KB} = 8\text{KB}$, 一定是 4KB 的倍數。

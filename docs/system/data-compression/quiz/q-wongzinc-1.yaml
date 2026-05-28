@@ -1,8 +1,8 @@
 author: wongzinc
 date: 2026-05-28
 question: |
-  有三個小檔案 X、Y、Z，壓縮後的大小分別為 1.2KB、2.8KB、3.5KB。在強制對齊邊界的傳統 4KB Block 系統中，
-  這三個檔案總共會消耗多少實體空間？如果改用 EROFS 的 Continuous Packing 技術，又會消耗多少實體空間？
+  有三個小檔案 X、Y、Z，壓縮後的大小分別為 1.2KB、2.8KB、3.5KB。在傳統 4KB Block 系統中，
+  這三個檔案總共會消耗多少實體空間？如果改用 EROFS，又會消耗多少實體空間？
 options:
   - text: "傳統：8KB / EROFS:8KB"
     explanation: |
